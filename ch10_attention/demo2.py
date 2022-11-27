@@ -9,6 +9,7 @@ from d2l import torch as d2l
 """给定的成对的“输⼊－输出”数据集 {(x1, y1), . . . ,(xn, yn)}，如何学习f来预测任意新输⼊x的输出yˆ = f(x)？"""
 # yi = 2 sin(xi) + x0^i.8 + ϵ 其中ϵ服从均值为0和标准差为0.5的正态分布。我们⽣成了50个训练样本和50个测试样本
 n_train = 50
+# # torch.sort排序后，返回排序后的tensor,和排序好了的元素对应之前的下标
 x_train, _ = torch.sort(torch.rand(n_train) * 5) # torch.rand一个均匀分布，torch.randn一个是标准正态分布。
 def f(x):
     return 2 * torch.sin(x) + x ** 0.8
@@ -45,7 +46,11 @@ def plot_kernel_reg(y_hat):
 
 # # X_repeat的形状:(n_test,n_train),
 # # 每⼀⾏都包含着相同的测试输⼊（例如：同样的查询）
-X_repeat = x_test.repeat_interleave(n_train).reshape((-1, n_train))
+"""
+repeat的参数是每一个维度上重复的次数， # repeat相当于将该张量复制，然后在某一维度concat起来
+repeat_interleave的参数是重复的次数和维度。# 而repeat_interleave是将张量中的元素沿某一维度复制n次，即复制后的张量沿该维度相邻的n个元素是相同的
+"""
+X_repeat = x_test.repeat_interleave(n_train).reshape((-1, n_train)) # torch.repeat_interleave重复张量的元素
 # x_train包含着键， attention_weights的形状：(n_test,n_train),
 # 每⼀⾏都包含着要在给定的每个查询的值（y_train）之间分配的注意⼒权重
 attention_weights = nn.functional.softmax(- (X_repeat - x_train) ** 2 / 2, dim=1)
@@ -82,8 +87,7 @@ class NWKernelRegression(nn.Module):
     def forward(self, queries, keys, values):
         # queries和attention_weights的形状为(查询个数，“键－值”对个数)
         queries = queries.repeat_interleave(keys.shape[1]).reshape((-1, keys.shape[1]))
-        self.attention_weights = nn.functional.softmax(
-            -((queries - keys) * self.w) ** 2 / 2, dim=1)
+        self.attention_weights = nn.functional.softmax(-((queries - keys) * self.w) ** 2 / 2, dim=1)
         # values的形状为(查询个数，“键－值”对个数)
         return torch.bmm(self.attention_weights.unsqueeze(1), values.unsqueeze(-1)).reshape(-1)
 
@@ -96,6 +100,7 @@ X_tile = x_train.repeat((n_train, 1)) # 复制 n_train = 50
 Y_tile = y_train.repeat((n_train, 1))
 # keys的形状:('n_train'，'n_train'-1)
 keys = X_tile[(1 - torch.eye(n_train)).type(torch.bool)].reshape((n_train, -1))
+
 # # values的形状:('n_train'，'n_train'-1)
 values = Y_tile[(1 - torch.eye(n_train)).type(torch.bool)].reshape((n_train, -1))
 
@@ -114,7 +119,7 @@ for epoch in range(5):
 
 # 训练完带参数的注意⼒汇聚模型后，我们发现：在尝试拟合带噪声的训练数据时，预测结果绘制
 # 的线不如之前⾮参数模型的平滑
-# # keys的形状:(n_test，n_train)，每⼀⾏包含着相同的训练输⼊（例如，相同的键）
+# keys的形状:(n_test，n_train)，每⼀⾏包含着相同的训练输⼊（例如，相同的键）
 keys = x_train.repeat((n_test, 1))
 values = y_train.repeat((n_test, 1))
 y_hat = net(x_test, keys, values).unsqueeze(1).detach()
@@ -122,6 +127,8 @@ plot_kernel_reg(y_hat)
 # 模型加⼊可学习的参数后，曲线在注意⼒权重较⼤的区域变得更不平滑。
 d2l.show_heatmaps(net.attention_weights.unsqueeze(0).unsqueeze(0),
                   xlabel='Sorted training inputs', ylabel='Sorted testing inputs')
+d2l.plt.show()
+
 
 
 
